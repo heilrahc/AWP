@@ -1,0 +1,7 @@
+Cows_identification/cows_datasets/
+Cows_identification/awp1/
+Cows_identification/runs/
+
+*.pt
+*.pth
+*.zip
