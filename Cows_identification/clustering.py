@@ -1,81 +1,80 @@
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications import EfficientNetB7
-from tensorflow.keras.models import Model
-from ultralytics import YOLO
-
-# for loading/processing the images
-from tensorflow.keras.utils import load_img
-
-# clustering and dimension reduction
-from sklearn.cluster import DBSCAN
-from sklearn.decomposition import PCA
-from sklearn.cluster import AgglomerativeClustering
-from sklearn.cluster import KMeans
-
-# for everything else
-import os
+import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-from random import randint
-import pandas as pd
-import pickle
-from sklearn.neighbors import NearestNeighbors
+import torch
+import torch.nn as nn
+import os
+from keras.models import Model
+from sklearn.cluster import KMeans
+from sklearn_extra.cluster import KMedoids
+from PIL import Image
+from ultralytics import YOLO
+from sklearn.decomposition import PCA
+import shutil
 
+CLUSTER_NUMBER = 19
+# The path of your images
+image_folder = "/home/mine01/Desktop/code/AWP/Cows_identification/cows_datasets_2/test"
 
-yolo = YOLO('runs/classify/train7/weights/best.pt')
-test_path = "/home/mine01/Desktop/code/AWP/SAM_Clustering/cows_datasets/test"
+image_paths = []
+features = []
 
-# Define the generators for training and testing data
-datagen = ImageDataGenerator(rescale = 1./255,
-                             shear_range = 0.2,
-                             zoom_range = 0.2,
-                             horizontal_flip = True)
+# Load the YOLO model
+yolo = YOLO('runs/classify/train2/weights/best.pt')
 
-test_generator = datagen.flow_from_directory(test_path,
-                                             target_size = (640, 640),
-                                             batch_size = 16,
-                                             class_mode = 'categorical')
+# Get a list of all layers in the model
+layers = list(yolo.model.children())
 
+# Create a new model that includes all layers up to the second to last one
+feature_model = nn.Sequential(*layers[:-1])
 
-# define a new model that outputs features from a specific layer
-feature_extractor = Model(inputs=yolo.inputs, outputs=yolo.get_layer('layer_name').output)
+# Process each image
+for subdir, dirs, files in os.walk(image_folder):
+    for file in files:
+        image_path = os.path.join(subdir, file)
+        image_paths.append(image_path)
+        # Read the image and convert to the size your model expects
+        image = cv2.imread(image_path)
+        image = cv2.resize(image, (640, 640))
 
-# get features
-features = feature_extractor.predict(test_generator)
+        # Convert image to tensor
+        image_tensor = torch.from_numpy(image).float().unsqueeze(0)
 
-def view_cluster(cluster, kmeans):
-    # Get filenames from the generator
-    filenames = test_generator.filenames
+        # Extract the features
+        feature = feature_model(image_tensor)
+        # Reshape the tensor to 1D
+        feature_1d = feature.view(-1)
+        features.append(feature_1d)
 
-    # Get the indices of files in this cluster
-    indices = np.where(kmeans.labels_ == cluster)[0]
+# Convert list of tensors to 2D tensor
+features_tensor = torch.stack(features)
 
-    # # Limit to 30 images
-    # if len(indices) > 30:
-    #     print(f"Clipping cluster size from {len(indices)} to 30")
-    #     indices = indices[:30]
+# Convert the tensor to numpy array
+features_array = features_tensor.numpy()
 
-    plt.figure(figsize = (15, 10))
+# Create a PCA object
+pca = PCA(n_components=200)
 
-    # Loop over the images of this cluster
-    for i, index in enumerate(indices):
-        img = load_img(os.path.join(test_path, filenames[index]))
-        plt.subplot(5, 6, i + 1)
-        plt.imshow(img)
-        plt.axis('off')
+# Fit the PCA model and transform your data
+reduced_features = pca.fit_transform(features_array)
 
-    plt.show()
+# # Perform KMeans clustering on the reduced data
+# kmeans = KMeans(n_clusters=CLUSTER_NUMBER, random_state=0, verbose=1).fit(reduced_features)
 
-# Reduce dimensionality
-pca = PCA(n_components=12, random_state=22)
-pca.fit(features)
-features_pca = pca.transform(features)
+# Perform KMedoids clustering on the reduced data
+kmedoids = KMedoids(n_clusters=CLUSTER_NUMBER, random_state=0).fit(reduced_features)
 
-# Perform KMeans clustering
-kmeans = KMeans(n_clusters=19, random_state=22)
-kmeans.fit(features_pca)
+# Make directories for each cluster
+os.mkdir('clusters')
 
-# Loop through the clusters
-for i in range(kmeans.n_clusters):
-    print(f"Cluster {i}:")
-    view_cluster(i, KMeans)
+for i in range(CLUSTER_NUMBER):  # change this to match the number of clusters
+    os.mkdir(f'clusters/cluster_{i}')
+
+# Copy the images to the respective cluster folders
+for i, image_path in enumerate(image_paths):
+    if os.path.exists(image_path):  # Check if the source file exists
+        cluster = kmedoids.labels_[i]
+        target_path = f'clusters/cluster_{cluster}/{os.path.basename(image_path)}'
+        print(f"Copying file from {image_path} to {target_path}")  # For debugging
+        shutil.copy(image_path, target_path)
+    else:
+        print(f"Source file does not exist: {image_path}")
