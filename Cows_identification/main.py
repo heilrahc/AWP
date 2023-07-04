@@ -12,11 +12,14 @@ FRAMES_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/frames'
 NUM_FRAMES = 25  # number of frames to extract from each video
 TIME_INTERVAL = 0.1  # time interval in seconds between each extracted frame
 
+TEST_NUM_FRAMES = 30
+TEST_TIME_INTERVAL = 0.1
+
 
 if __name__ == "__main__":
     # extract_frame(VIDEOS_PATH, FRAMES_PATH, NUM_FRAMES, TIME_INTERVAL)
     # segment_images(FRAMES_PATH)
     yolo = yolo_train(train=False)
-    classify_videos(TEST_VIDEOS_PATH, yolo, NUM_FRAMES, TIME_INTERVAL)
+    classify_videos(TEST_VIDEOS_PATH, yolo, TEST_NUM_FRAMES, TEST_TIME_INTERVAL)
 
 

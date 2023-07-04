@@ -4,21 +4,21 @@ from segment_anything import sam_model_registry, SamPredictor
 from collections import defaultdict
 import numpy as np
 import json
-import shutil
+from ultralytics import YOLO
+import torch
+from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import shutil
 
-SAM_CHECKPOINT = "sam_vit_h_4b8939.pth"
-MODEL_TYPE = "vit_h"
-DEVICE = "cuda"
 TEST_VIDEOS_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/test_videos'
 
-
-def init_sam_model(model_type, device, checkpoint):
-    sam = sam_model_registry[model_type](checkpoint=checkpoint)
-    sam.to(device=device)
-    return SamPredictor(sam)
+def find_index_of_class(cls, target=19.):
+    equals_target = torch.eq(cls, target)
+    if torch.any(equals_target):
+        return torch.nonzero(equals_target)[0].item()
+    else:
+        return None
 
 
 def extract_frames(video_path, num_frames, time_interval):
@@ -36,8 +36,8 @@ def extract_frames(video_path, num_frames, time_interval):
     # Get total frames
     total_frames = vidcap.get(cv2.CAP_PROP_FRAME_COUNT)
     # Calculate the start and end frame for the middle few 5%
-    start_frame = int(total_frames * 0.45)
-    end_frame = int(total_frames * 0.55)
+    start_frame = int(total_frames * 0.40)
+    end_frame = int(total_frames * 0.60)
 
     success, image = vidcap.read()
     frame_count = 0
@@ -85,40 +85,45 @@ def auto_crop(image):
 
 
 def process_image(frames, predictor):
+    yolo_seg = predictor
     masked_images = []
     for frame in frames:
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        seg_result = yolo_seg(image)[0]
+        indx = find_index_of_class(seg_result.boxes.cls)
 
-        predictor.set_image(image)
-        input_point = np.array([[1000, 630], [950, 570], [1060, 600]])
-        # input_point = np.array([[600, 500], [630, 530], [570, 470]])
-        input_label = np.array([1, 1, 1])
+        if indx is not None:
+            seg_mask = seg_result.masks.data[indx].cpu().numpy()
 
-        masks, scores, logits = predictor.predict(
-            point_coords=input_point,
-            point_labels=input_label,
-            multimask_output=True,
-        )
-        mask_input = logits[np.argmax(scores), :, :]
-        masks, _, _ = predictor.predict(
-            point_coords=input_point,
-            point_labels=input_label,
-            mask_input=mask_input[None, :, :],
-            multimask_output=False,
-        )
-        masked_image = image * masks[0][:, :, None]  # If masks has more than 1 dimension, select the relevant one
-        masked_image = cv2.cvtColor(masked_image.astype(np.uint8), cv2.COLOR_RGB2BGR)  # Convert the masked image back to BGR color scheme for saving
-        masked_image = auto_crop(masked_image)
+            # Resize the image to match the mask dimensions
+            resized_mask = cv2.resize(seg_mask, (frame.shape[1], frame.shape[0]))
 
-        masked_images.append(masked_image)
+            # Expand the dimensions of the mask to match the number of channels in the resized image
+            seg_mask_expanded = np.expand_dims(resized_mask, axis=2)
+            seg_mask_expanded = np.tile(seg_mask_expanded, (1, 1, frame.shape[2]))
+
+            # Perform the multiplication
+            seg1 = seg_mask_expanded * frame
+
+            # todo: convert seg1 back to RGB color scheme
+            masked_image = cv2.cvtColor(seg1.astype(np.uint8), cv2.COLOR_RGB2BGR)
+            masked_image = auto_crop(masked_image)
+
+            masked_images.append(masked_image)
 
     return masked_images
 
 
-def yolo_predict(video_path, masked_images, yolo):
+def yolo_predict(video_path, masked_images, yolo_finetuned):
     dict = {}
-    for image in masked_images:
-        result = yolo(image)
+    # Change the file extension to ".json"
+    json_path = video_path.rsplit('.', 1)[0] + '.json'
+    image_path = video_path.rsplit('.', 1)[0] + '.png'
+    for idx, image in enumerate(masked_images):
+        result = yolo_finetuned(image)
+        if idx == 1:
+            result_plotted = result[0].plot()
+            Image.fromarray(result_plotted).save(image_path)
         probs = result[0].probs
         top5_indx = probs.top5
         top5_class = [result[0].names[i] for i in top5_indx]
@@ -142,18 +147,24 @@ def yolo_predict(video_path, masked_images, yolo):
     for key, value in top5_items:
         new_dict[key] = value / len(masked_images)
 
-    # Change the file extension to ".json"
-    file_name = video_path.rsplit('.', 1)[0] + '.json'
-
     # Create the file and save the top 5 dictionary to it
-    with open(file_name, 'w') as file:
+    with open(json_path, 'w') as file:
         json.dump(new_dict, file)
 
+    return new_dict
 
-def classify_videos(video_path, yolo, num_frames, time_interval):
-    predictor = init_sam_model(MODEL_TYPE, DEVICE, SAM_CHECKPOINT)
-    for subdir, dirs, files in os.walk(video_path):
+
+def classify_videos(test_videos_path, yolo_finetune, num_frames, time_interval):
+    predictor = YOLO("yolov8s-seg.pt")
+
+    # # Train the model
+    # predictor.train(data='coco128-seg.yaml', epochs=100, imgsz=640)
+    num_hits = 0
+    num_videos = 0
+    for subdir, dirs, files in os.walk(test_videos_path):
         if files:
+            score = 0
+            subdir_len = 0
             # Get the last part of directory which is considered as the video number
             video_number = os.path.basename(subdir)
             # Sort files to ensure naming is in order
@@ -161,8 +172,29 @@ def classify_videos(video_path, yolo, num_frames, time_interval):
 
             # Enumerate files with 1-based index and construct name
             for index, file in enumerate(files, start=1):
-                # Load the video using OpenCV
-                video_path = os.path.join(subdir, file)
-                frames = extract_frames(video_path, num_frames, time_interval)
-                masked_images = process_image(frames, predictor)
-                yolo_predict(video_path, masked_images, yolo)
+                if file.endswith(('.MP4')):
+                    # Load the video using OpenCV
+                    video_path = os.path.join(subdir, file)
+                    frames = extract_frames(video_path, num_frames, time_interval)
+                    masked_images = process_image(frames, predictor)
+                    top5 = yolo_predict(video_path, masked_images, yolo_finetune)
+                    top1_label = next(iter(top5), None)
+                    if top1_label is not None:
+                        subdir_len += 1
+                        if top1_label == video_number:
+                            score += 1
+            if subdir_len != 0:
+                acc = score / subdir_len
+            else:
+                acc = 0
+
+            with open(os.path.join(subdir, "accuracy_l_test.txt"), 'w') as file:
+                file.write(str(acc))
+
+            num_hits += score
+            num_videos += subdir_len
+
+    accuracy = num_hits / num_videos
+
+    with open(os.path.join(test_videos_path, "accuracy_l_test.txt"), 'w') as file:
+        file.write(str(accuracy))
