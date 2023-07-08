@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import shutil
 
-TEST_VIDEOS_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/test_videos'
+# TEST_VIDEOS_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/test_videos'
 
 def find_index_of_class(cls, target=19.):
     equals_target = torch.eq(cls, target)
@@ -156,13 +156,13 @@ def classify_videos(test_videos_path, yolo_finetune, seg_model, num_frames, time
     # # Train the model
     # predictor.train(data='coco128-seg.yaml', epochs=100, imgsz=640)
     if trained_model_path is None:
-        result_name = "accuracy_" + model_size + "_" + num_frames + "frames.txt"
+        result_name = "accuracy_" + model_size + "_" + str(num_frames) + "frames.txt"
     else:
-        result_name = "accuracy_" + trained_model_path + "_" + num_frames + "frames.txt"
+        result_name = "accuracy_" + trained_model_path.split('/')[2] + "_" + str(num_frames) + "frames.txt"
 
     num_hits = 0
     num_videos = 0
-    
+
     for subdir, dirs, files in os.walk(test_videos_path):
         if files:
             score = 0

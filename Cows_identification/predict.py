@@ -2,23 +2,21 @@ from ultralytics import YOLO
 import cv2
 import os
 
-YOLO_DATA = "/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets"
 
-
-def init_yolo(yolo_cls, model_path, train):
+def init_yolo(yolo_cls, train_dataset, epochs, model_path, train):
     if model_path is None:
         # Load a pretrained YOLO model (recommended for training)
         yolo = yolo_cls
 
         # Train the model
-        yolo.train(data=YOLO_DATA, epochs=100, imgsz=640)
+        yolo.train(data=train_dataset, epochs=epochs, imgsz=640)
     else:
         # Load a trained YOLO model
         yolo = YOLO(model_path)
 
         if train:
             # Re-Train the model
-            yolo.train(data=YOLO_DATA, epochs=50, imgsz=640)
+            yolo.train(data=train_dataset, epochs=epochs, imgsz=640)
 
 
 
@@ -30,8 +28,8 @@ def init_yolo(yolo_cls, model_path, train):
     return yolo
 
 
-def yolo_train(yolo_cls, yolo_cls_trained_path=None, train=False):
-    yolo = init_yolo(yolo_cls, yolo_cls_trained_path, train=train)
+def yolo_train(yolo_cls, train_dataset, epochs, yolo_cls_trained_path=None, train=False):
+    yolo = init_yolo(yolo_cls, train_dataset, epochs, yolo_cls_trained_path, train=train)
     return yolo
 
 
