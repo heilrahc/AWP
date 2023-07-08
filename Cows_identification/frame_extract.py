@@ -45,8 +45,8 @@ def extract_frames(path, frames_path, num_frames, time_interval):
                 # Get total frames
                 total_frames = vidcap.get(cv2.CAP_PROP_FRAME_COUNT)
                 # Calculate the start and end frame for the middle few 5%
-                start_frame = int(total_frames * 0.45)
-                end_frame = int(total_frames * 0.55)
+                start_frame = int(total_frames * 0.35)
+                end_frame = int(total_frames * 0.65)
 
                 success, image = vidcap.read()
                 frame_count = 0
@@ -57,11 +57,6 @@ def extract_frames(path, frames_path, num_frames, time_interval):
                         frame_name = f"{video_name}_{extracted_frames + 1}.png"
                         frame_path = os.path.join(frames_path, frame_name)
                         cv2.imwrite(frame_path, image)
-
-                        # Add the following code to display the image:
-                        img = mpimg.imread(frame_path)
-                        imgplot = plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-                        plt.show()
 
                         extracted_frames += 1
                     success, image = vidcap.read()

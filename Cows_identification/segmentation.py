@@ -5,21 +5,28 @@ import numpy as np
 import shutil
 import cv2
 import os
+import torch
 
 sys.path.append("..")
-SAM_CHECKPOINT = "sam_vit_h_4b8939.pth"
-MODEL_TYPE = "vit_h"
-DEVICE = "cuda"
-TRAIN_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/cows_datasets/train'
-TEST_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/cows_datasets/test'
+# SAM_CHECKPOINT = "sam_vit_h_4b8939.pth"
+# MODEL_TYPE = "vit_h"
+# DEVICE = "cuda"
+TRAIN_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets/train'
+TEST_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets/test'
 video_dict = defaultdict(str)
 
 
-def init_sam_model(model_type, device, checkpoint):
-    sam = sam_model_registry[model_type](checkpoint=checkpoint)
-    sam.to(device=device)
-    return SamPredictor(sam)
+# def init_sam_model(model_type, device, checkpoint):
+#     sam = sam_model_registry[model_type](checkpoint=checkpoint)
+#     sam.to(device=device)
+#     return SamPredictor(sam)
 
+def find_index_of_class(cls, target=19.):
+    equals_target = torch.eq(cls, target)
+    if torch.any(equals_target):
+        return torch.nonzero(equals_target)[0].item()
+    else:
+        return None
 
 def create_directories(path):
     os.makedirs(path, exist_ok=True)
@@ -66,45 +73,63 @@ def auto_crop(image):
     return crop_img
 
 
-def process_image(image_path, train_path, test_path, predictor, test_ratio=0.1):
+def process_image(image_path, train_path, test_path, seg_model, test_ratio=0.1):
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    predictor.set_image(image)
-    input_point = np.array([[1000, 630], [950, 570], [1060, 600]])
-    # input_point = np.array([[600, 500], [630, 530], [570, 470]])
-    input_label = np.array([1, 1, 1])
+    # predictor.set_image(image)
+    # input_point = np.array([[1000, 630], [950, 570], [1060, 600]])
+    # # input_point = np.array([[600, 500], [630, 530], [570, 470]])
+    # input_label = np.array([1, 1, 1])
+    #
+    # masks, scores, logits = predictor.predict(
+    #     point_coords=input_point,
+    #     point_labels=input_label,
+    #     multimask_output=True,
+    # )
+    # mask_input = logits[np.argmax(scores), :, :]
+    # masks, _, _ = predictor.predict(
+    #     point_coords=input_point,
+    #     point_labels=input_label,
+    #     mask_input=mask_input[None, :, :],
+    #     multimask_output=False,
+    # )
+    # masked_image = image * masks[0][:, :, None]  # If masks has more than 1 dimension, select the relevant one
+    # masked_image = cv2.cvtColor(masked_image.astype(np.uint8), cv2.COLOR_RGB2BGR)  # Convert the masked image back to BGR color scheme for saving
+    # masked_image = auto_crop(masked_image)
+    seg_result = seg_model(image)[0]
+    indx = find_index_of_class(seg_result.boxes.cls)
 
-    masks, scores, logits = predictor.predict(
-        point_coords=input_point,
-        point_labels=input_label,
-        multimask_output=True,
-    )
-    mask_input = logits[np.argmax(scores), :, :]
-    masks, _, _ = predictor.predict(
-        point_coords=input_point,
-        point_labels=input_label,
-        mask_input=mask_input[None, :, :],
-        multimask_output=False,
-    )
-    masked_image = image * masks[0][:, :, None]  # If masks has more than 1 dimension, select the relevant one
-    masked_image = cv2.cvtColor(masked_image.astype(np.uint8), cv2.COLOR_RGB2BGR)  # Convert the masked image back to BGR color scheme for saving
-    masked_image = auto_crop(masked_image)
+    if indx is not None:
+        seg_mask = seg_result.masks.data[indx].cpu().numpy()
 
-    cow_id, video_id, _, _ = os.path.basename(image_path).split('_')
-    if not video_dict[f"{cow_id}_{video_id}"]:  # Check if this video has been assigned before
-        video_dict[f"{cow_id}_{video_id}"] = test_path if np.random.rand() < test_ratio else train_path
-    new_dir = os.path.join(video_dict[f"{cow_id}_{video_id}"], cow_id)
-    os.makedirs(new_dir, exist_ok=True)
-    cv2.imwrite(os.path.join(new_dir, f'mask_{os.path.basename(image_path)}'), masked_image)
+        # Resize the image to match the mask dimensions
+        resized_mask = cv2.resize(seg_mask, (image.shape[1], image.shape[0]))
+
+        # Expand the dimensions of the mask to match the number of channels in the resized image
+        seg_mask_expanded = np.expand_dims(resized_mask, axis=2)
+        seg_mask_expanded = np.tile(seg_mask_expanded, (1, 1, image.shape[2]))
+
+        # Perform the multiplication
+        seg1 = seg_mask_expanded * image
+
+        # convert seg1 back to RGB color scheme
+        masked_image = cv2.cvtColor(seg1.astype(np.uint8), cv2.COLOR_RGB2BGR)
+        masked_image = auto_crop(masked_image)
+
+        cow_id, video_id, _, _ = os.path.basename(image_path).split('_')
+        if not video_dict[f"{cow_id}_{video_id}"]:  # Check if this video has been assigned before
+            video_dict[f"{cow_id}_{video_id}"] = test_path if np.random.rand() < test_ratio else train_path
+        new_dir = os.path.join(video_dict[f"{cow_id}_{video_id}"], cow_id)
+        os.makedirs(new_dir, exist_ok=True)
+        cv2.imwrite(os.path.join(new_dir, f'mask_{os.path.basename(image_path)}'), masked_image)
 
 
-def segment_images(frame_dir):
-    predictor = init_sam_model(MODEL_TYPE, DEVICE, SAM_CHECKPOINT)
+def segment_images(frame_dir, seg_model):
     create_directories(TRAIN_PATH)
     create_directories(TEST_PATH)
     for image_file in os.listdir(frame_dir):
         image_path = os.path.join(frame_dir, image_file)
         print(image_path)
         if os.path.isfile(image_path):
-            process_image(image_path, TRAIN_PATH, TEST_PATH, predictor)
+            process_image(image_path, TRAIN_PATH, TEST_PATH, seg_model)

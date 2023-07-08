@@ -84,29 +84,28 @@ def auto_crop(image):
     return crop_img
 
 
-def process_image(frames, predictor):
-    yolo_seg = predictor
+def process_image(frames, seg_model):
     masked_images = []
     for frame in frames:
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        seg_result = yolo_seg(image)[0]
+        seg_result = seg_model(image)[0]
         indx = find_index_of_class(seg_result.boxes.cls)
 
         if indx is not None:
             seg_mask = seg_result.masks.data[indx].cpu().numpy()
 
             # Resize the image to match the mask dimensions
-            resized_mask = cv2.resize(seg_mask, (frame.shape[1], frame.shape[0]))
+            resized_img = cv2.resize(image, (seg_mask.shape[1], seg_mask.shape[0]))
 
             # Expand the dimensions of the mask to match the number of channels in the resized image
-            seg_mask_expanded = np.expand_dims(resized_mask, axis=2)
-            seg_mask_expanded = np.tile(seg_mask_expanded, (1, 1, frame.shape[2]))
+            seg_mask_expanded = np.expand_dims(seg_mask, axis=2)
+            seg_mask_expanded = np.tile(seg_mask_expanded, (1, 1, resized_img.shape[2]))
 
             # Perform the multiplication
-            seg1 = seg_mask_expanded * frame
+            seg_image = seg_mask_expanded * resized_img
 
-            # todo: convert seg1 back to RGB color scheme
-            masked_image = cv2.cvtColor(seg1.astype(np.uint8), cv2.COLOR_RGB2BGR)
+            # convert seg1 back to RGB color scheme
+            masked_image = cv2.cvtColor(seg_image.astype(np.uint8), cv2.COLOR_RGB2BGR)
             masked_image = auto_crop(masked_image)
 
             masked_images.append(masked_image)
@@ -154,11 +153,13 @@ def yolo_predict(video_path, masked_images, yolo_finetuned):
     return new_dict
 
 
-def classify_videos(test_videos_path, yolo_finetune, num_frames, time_interval):
-    predictor = YOLO("yolov8s-seg.pt")
-
+def classify_videos(test_videos_path, yolo_finetune, seg_model, num_frames, time_interval, model_size, trained_model_path=None):
     # # Train the model
     # predictor.train(data='coco128-seg.yaml', epochs=100, imgsz=640)
+    if trained_model_path is None
+        result_name = "accuracy_" + model_size + "_" + num_frames + "frames.txt"
+    else:
+        result_name = "accuracy_" + trained_model_path + "_" + num_frames + "frames.txt"
     num_hits = 0
     num_videos = 0
     for subdir, dirs, files in os.walk(test_videos_path):
@@ -176,7 +177,7 @@ def classify_videos(test_videos_path, yolo_finetune, num_frames, time_interval):
                     # Load the video using OpenCV
                     video_path = os.path.join(subdir, file)
                     frames = extract_frames(video_path, num_frames, time_interval)
-                    masked_images = process_image(frames, predictor)
+                    masked_images = process_image(frames, seg_model)
                     top5 = yolo_predict(video_path, masked_images, yolo_finetune)
                     top1_label = next(iter(top5), None)
                     if top1_label is not None:
@@ -188,7 +189,7 @@ def classify_videos(test_videos_path, yolo_finetune, num_frames, time_interval):
             else:
                 acc = 0
 
-            with open(os.path.join(subdir, "accuracy_l_test.txt"), 'w') as file:
+            with open(os.path.join(subdir, result_name), 'w') as file:
                 file.write(str(acc))
 
             num_hits += score
@@ -196,5 +197,9 @@ def classify_videos(test_videos_path, yolo_finetune, num_frames, time_interval):
 
     accuracy = num_hits / num_videos
 
-    with open(os.path.join(test_videos_path, "accuracy_l_test.txt"), 'w') as file:
+    print("The model correctly classify ", num_hits, "videos out of ", num_videos, "videos")
+    print("Accuracy (video level): ", accuracy)
+
+    with open(os.path.join(test_videos_path, result_name), 'w') as file:
         file.write(str(accuracy))
+
