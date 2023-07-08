@@ -1,6 +1,5 @@
 import os
 import cv2
-from segment_anything import sam_model_registry, SamPredictor
 from collections import defaultdict
 import numpy as np
 import json
@@ -156,12 +155,14 @@ def yolo_predict(video_path, masked_images, yolo_finetuned):
 def classify_videos(test_videos_path, yolo_finetune, seg_model, num_frames, time_interval, model_size, trained_model_path=None):
     # # Train the model
     # predictor.train(data='coco128-seg.yaml', epochs=100, imgsz=640)
-    if trained_model_path is None
+    if trained_model_path is None:
         result_name = "accuracy_" + model_size + "_" + num_frames + "frames.txt"
     else:
         result_name = "accuracy_" + trained_model_path + "_" + num_frames + "frames.txt"
+
     num_hits = 0
     num_videos = 0
+    
     for subdir, dirs, files in os.walk(test_videos_path):
         if files:
             score = 0
