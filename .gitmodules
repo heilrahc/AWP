@@ -1,0 +1,3 @@
+[submodule "Cows_identification/amazon-lameness-phase2"]
+	path = Cows_identification/amazon-lameness-phase2
+	url = https://github.com/skysheng7/amazon-lameness-phase2.git
