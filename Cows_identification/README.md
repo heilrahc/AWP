@@ -27,4 +27,9 @@ Then you can start training by the following command
 
 python3 main.py --train_videos data/train_videos --inf_videos data/test_videos --cls_model m --seg_model m --epochs 30
 
-the above command trains a yolo medium model by 30 epochs and do inference on te
+the above command trains a yolo medium model by 30 epochs and do inference on test videos. The results will be printed
+in the console and saved under the same folder as the test videos. 
+
+Details arguments you can add is listed in main.py.
+
+For example, if you have dataset built already,  you can replace the --train_videos to --train_dataset to skip the frame extraction part

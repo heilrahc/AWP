@@ -44,7 +44,7 @@ def extract_frames(path, frames_path, num_frames, time_interval):
 
                 # Get total frames
                 total_frames = vidcap.get(cv2.CAP_PROP_FRAME_COUNT)
-                # Calculate the start and end frame for the middle few 5%
+                # Calculate the start and end frame for the middle few 30%
                 start_frame = int(total_frames * 0.35)
                 end_frame = int(total_frames * 0.65)
 
