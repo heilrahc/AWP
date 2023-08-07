@@ -1,14 +1,9 @@
 import os
 import cv2
-from collections import defaultdict
 import numpy as np
 import json
-from ultralytics import YOLO
 import torch
 from PIL import Image
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import shutil
 
 # TEST_VIDEOS_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/test_videos'
 
