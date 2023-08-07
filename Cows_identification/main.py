@@ -2,8 +2,6 @@ from frame_extract import extract_frames
 from segmentation import segment_images
 from predict import yolo_train
 from video_inf_cls import classify_videos
-import matplotlib.pyplot as plt
-from video_inf_knn import cluster_unlabelled_videos
 from ultralytics import YOLO
 import argparse
 
@@ -44,6 +42,8 @@ if __name__ == "__main__":
                         help='numbers of frames to extract for inference')
     parser.add_argument('--time_interval_i', metavar='time_interval_i', type=float, default=0.2,
                         help='time interval between frames for inference')
+    parser.add_argument('--test_ratio', metavar='test_ratio', type=float, default=0.0,
+                        help='portion of videos/frames that got split into test folder')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -51,43 +51,32 @@ if __name__ == "__main__":
     yolo_seg = YOLO("yolov8" + args.seg_model + "-seg.pt")
     yolo_cls = YOLO("yolov8" + args.cls_model + "-cls.pt")
 
-    # TODO: remeber to clean this up
-    accuracies = []
-    # num_frames_list = [1, 3, 5, 8, 11, 13, 15]
-    num_frames_list = [30]
-    dataset_sizes = []
+    # accuracies = []
 
-    for num_frames_t in num_frames_list:
-        args.num_frames_t = num_frames_t
 
-        if args.trained_cls_model is None:
-            if args.train_dataset is None:
-                print("here")
-                data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
-                segment_images(args.frame_path, yolo_seg)
-                dataset_sizes.append(data_size)
-                # print("Traing dataset size is approx: ", len(frames))
-                yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, train=args.retrain)
-            else:
-                yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, train=args.retrain)
+    if args.trained_cls_model is None:
+        if args.train_dataset is None:
+            data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
+            segment_images(args.frame_path, yolo_seg, test_ratio=args.test_ratio)
+            yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, train=args.retrain)
         else:
-            if args.train_dataset is None:
-                data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
-                segment_images(args.frame_path, yolo_seg)
-                dataset_sizes.append(data_size)
-                # print("Traing dataset size is approx: ", len(frames))
-                yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, args.trained_cls_model, train=args.retrain)
-            else:
-                yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, args.trained_cls_model, train=args.retrain)
+            yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, train=args.retrain)
+    else:
+        if args.train_dataset is None:
+            data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
+            segment_images(args.frame_path, yolo_seg, test_ratio=args.test_ratio)
+            yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, args.trained_cls_model, train=args.retrain)
+        else:
+            yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, args.trained_cls_model, train=args.retrain)
 
-        if args.inf_videos is not None:
-            # perform videos inference
-            accuracy = classify_videos(args.inf_videos, yolo, yolo_seg, args.num_frames_i, args.time_interval_i,
-                                       args.cls_model, args.trained_cls_model)
-            accuracies.append(accuracy)
+    if args.inf_videos is not None:
+        # perform videos inference
+        accuracy = classify_videos(args.inf_videos, yolo, yolo_seg, args.num_frames_i, args.time_interval_i,
+                                   args.cls_model, args.trained_cls_model)
+        # accuracies.append(accuracy)
 
-            # cluster_unlabelled_videos(args.unlabelled_video_path, args.labelled_video_path, yolo, yolo_seg,
-            #                           args.num_frames_i, args.time_interval_i)
+        # cluster_unlabelled_videos(args.unlabelled_video_path, args.labelled_video_path, yolo, yolo_seg,
+        #                           args.num_frames_i, args.time_interval_i)
 
 
     # # Create a plot

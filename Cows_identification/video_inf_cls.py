@@ -1,14 +1,10 @@
 import os
 import cv2
-from collections import defaultdict
 import numpy as np
 import json
-from ultralytics import YOLO
 import torch
 from PIL import Image
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import shutil
+
 
 
 def find_index_of_class(cls, target=19.):

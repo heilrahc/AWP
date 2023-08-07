@@ -1,6 +1,4 @@
 from ultralytics import YOLO
-import cv2
-import os
 
 
 def init_yolo(yolo_cls, train_dataset, epochs, model_path, re_train):

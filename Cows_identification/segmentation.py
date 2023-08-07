@@ -63,7 +63,7 @@ def auto_crop(image):
     return crop_img
 
 
-def process_image(image_path, train_path, test_path, seg_model, test_ratio=0.0):
+def process_image(image_path, train_path, test_path, seg_model, test_ratio):
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
@@ -95,11 +95,11 @@ def process_image(image_path, train_path, test_path, seg_model, test_ratio=0.0):
         cv2.imwrite(os.path.join(new_dir, f'mask_{os.path.basename(image_path)}'), masked_image)
 
 
-def segment_images(frame_dir, seg_model):
+def segment_images(frame_dir, seg_model, test_ratio):
     create_directories(TRAIN_PATH)
     create_directories(TEST_PATH)
     for image_file in os.listdir(frame_dir):
         image_path = os.path.join(frame_dir, image_file)
         print(image_path)
         if os.path.isfile(image_path):
-            process_image(image_path, TRAIN_PATH, TEST_PATH, seg_model)
+            process_image(image_path, TRAIN_PATH, TEST_PATH, seg_model, test_ratio)
