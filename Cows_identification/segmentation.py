@@ -1,5 +1,4 @@
 import sys
-from segment_anything import sam_model_registry, SamPredictor
 from collections import defaultdict
 import numpy as np
 import shutil
@@ -8,18 +7,9 @@ import os
 import torch
 
 sys.path.append("..")
-# SAM_CHECKPOINT = "sam_vit_h_4b8939.pth"
-# MODEL_TYPE = "vit_h"
-# DEVICE = "cuda"
 TRAIN_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets/train'
 TEST_PATH = '/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets/test'
 video_dict = defaultdict(str)
-
-
-# def init_sam_model(model_type, device, checkpoint):
-#     sam = sam_model_registry[model_type](checkpoint=checkpoint)
-#     sam.to(device=device)
-#     return SamPredictor(sam)
 
 def find_index_of_class(cls, target=19.):
     equals_target = torch.eq(cls, target)
@@ -73,30 +63,10 @@ def auto_crop(image):
     return crop_img
 
 
-def process_image(image_path, train_path, test_path, seg_model, test_ratio=0.1):
+def process_image(image_path, train_path, test_path, seg_model, test_ratio=0.0):
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    # predictor.set_image(image)
-    # input_point = np.array([[1000, 630], [950, 570], [1060, 600]])
-    # # input_point = np.array([[600, 500], [630, 530], [570, 470]])
-    # input_label = np.array([1, 1, 1])
-    #
-    # masks, scores, logits = predictor.predict(
-    #     point_coords=input_point,
-    #     point_labels=input_label,
-    #     multimask_output=True,
-    # )
-    # mask_input = logits[np.argmax(scores), :, :]
-    # masks, _, _ = predictor.predict(
-    #     point_coords=input_point,
-    #     point_labels=input_label,
-    #     mask_input=mask_input[None, :, :],
-    #     multimask_output=False,
-    # )
-    # masked_image = image * masks[0][:, :, None]  # If masks has more than 1 dimension, select the relevant one
-    # masked_image = cv2.cvtColor(masked_image.astype(np.uint8), cv2.COLOR_RGB2BGR)  # Convert the masked image back to BGR color scheme for saving
-    # masked_image = auto_crop(masked_image)
     seg_result = seg_model(image)[0]
     indx = find_index_of_class(seg_result.boxes.cls)
 

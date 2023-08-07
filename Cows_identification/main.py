@@ -1,10 +1,13 @@
-from frame_extract import extract_frame
+from frame_extract import extract_frames
 from segmentation import segment_images
 from predict import yolo_train
-from video_inf import classify_videos
+from video_inf_cls import classify_videos
+import matplotlib.pyplot as plt
+from video_inf_knn import cluster_unlabelled_videos
 from ultralytics import YOLO
 import argparse
 
+DEFAULT_DATASET = "/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets"
 
 if __name__ == "__main__":
     # Create the parser
@@ -15,8 +18,12 @@ if __name__ == "__main__":
                         help='path to your train videos path (if you do not have a train datasets, only raw videos)')
     parser.add_argument('--train_dataset', metavar='train_dataset', type=str, default=None,
                         help='path to your train dataset path')
-    parser.add_argument('--frame_path', metavar='frame_path', type=str,
+    parser.add_argument('--frame_path', metavar='frame_path', type=str, default="frames",
                         help='path to where you (want to) store the frames')
+    parser.add_argument('--unlabelled_video_path', metavar='unlabelled_video_path', type=str, default=None,
+                        help='path to where you store the unlabelled videos for knn')
+    parser.add_argument('--labelled_video_path', metavar='labelled_video_path', type=str, default=None,
+                        help='path to where you store the unlabelled videos for knn')
     parser.add_argument('--inf_videos', metavar='inf_videos', type=str, default=None,
                         help='path to the videos you want to do inference on')
     parser.add_argument('--cls_model', metavar='cls_model', type=str, choices=['n', 's', 'm', 'l'], default='s',
@@ -35,7 +42,7 @@ if __name__ == "__main__":
                         help='time interval between frames for training')
     parser.add_argument('--num_frames_i', metavar='num_frames_i', type=int, default=3,
                         help='numbers of frames to extract for inference')
-    parser.add_argument('--time_interval_i', metavar='time_interval_i', type=float, default=0.3,
+    parser.add_argument('--time_interval_i', metavar='time_interval_i', type=float, default=0.2,
                         help='time interval between frames for inference')
 
     # Parse the arguments
@@ -44,19 +51,51 @@ if __name__ == "__main__":
     yolo_seg = YOLO("yolov8" + args.seg_model + "-seg.pt")
     yolo_cls = YOLO("yolov8" + args.cls_model + "-cls.pt")
 
-    # if dataset is not built, built training dataset using videos
-    if args.train_dataset is None:
-        extract_frame(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
-        segment_images(args.frame_path, yolo_seg)
+    # TODO: remeber to clean this up
+    accuracies = []
+    # num_frames_list = [1, 3, 5, 8, 11, 13, 15]
+    num_frames_list = [30]
+    dataset_sizes = []
 
-    # train/load the classification model
-    if args.trained_cls_model is None:
-        yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs)
-    else:
-        yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs,
-                          yolo_cls_trained_path=args.trained_cls_model, train=args.retrain)
+    for num_frames_t in num_frames_list:
+        args.num_frames_t = num_frames_t
 
-    if args.inf_videos is not None:
-        # perform videos inference
-        classify_videos(args.inf_videos, yolo, yolo_seg, args.num_frames_i, args.time_interval_i,
-                        args.cls_model, args.trained_cls_model)
+        if args.trained_cls_model is None:
+            if args.train_dataset is None:
+                print("here")
+                data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
+                segment_images(args.frame_path, yolo_seg)
+                dataset_sizes.append(data_size)
+                # print("Traing dataset size is approx: ", len(frames))
+                yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, train=args.retrain)
+            else:
+                yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, train=args.retrain)
+        else:
+            if args.train_dataset is None:
+                data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
+                segment_images(args.frame_path, yolo_seg)
+                dataset_sizes.append(data_size)
+                # print("Traing dataset size is approx: ", len(frames))
+                yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, args.trained_cls_model, train=args.retrain)
+            else:
+                yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, args.trained_cls_model, train=args.retrain)
+
+        if args.inf_videos is not None:
+            # perform videos inference
+            accuracy = classify_videos(args.inf_videos, yolo, yolo_seg, args.num_frames_i, args.time_interval_i,
+                                       args.cls_model, args.trained_cls_model)
+            accuracies.append(accuracy)
+
+            # cluster_unlabelled_videos(args.unlabelled_video_path, args.labelled_video_path, yolo, yolo_seg,
+            #                           args.num_frames_i, args.time_interval_i)
+
+
+    # # Create a plot
+    # plt.figure(figsize=(10, 6))  # Optional, to adjust the figure size
+    # plt.plot(dataset_sizes, accuracies, marker='o')  # 'o' to mark the data points
+    # plt.title('Accuracy vs dataset size')
+    # plt.xlabel('size of the dataset')
+    # plt.ylabel('Accuracy')
+    #
+    # # Save the plot
+    # plt.savefig('/home/mine01/Desktop/code/AWP/Cows_identification/plots/accuracy_vs_dataset_size.png')

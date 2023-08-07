@@ -1,7 +1,7 @@
 import os
 
 # change these to match your dataset
-root_dir = '/home/mine01/Desktop/code/AWP/Cows_identification/cows_datasets_detect'
+root_dir = '/AWP/Cows_identification/cows_datasets_detect'
 
 # these will contain the names of all the images for which you've created labels
 train_image_files = []

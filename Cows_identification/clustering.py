@@ -19,7 +19,7 @@ image_paths = []
 features = []
 
 # Load the YOLO model
-yolo = YOLO('runs/classify/train2/weights/best.pt')
+yolo = YOLO('runs/classify/train2_99/weights/best.pt')
 
 # Get a list of all layers in the model
 layers = list(yolo.model.children())

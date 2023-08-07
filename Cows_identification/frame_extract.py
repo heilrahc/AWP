@@ -1,7 +1,5 @@
 import os
 import cv2
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import shutil
 
 
@@ -13,8 +11,20 @@ def extract_frames(path, frames_path, num_frames, time_interval):
     # Make sure the frame directory exists
     os.makedirs(frames_path, exist_ok=True)
 
+    # Make sure the frame directory is empty
+    for filename in os.listdir(frames_path):
+        file_path = os.path.join(frames_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(f'Failed to delete {file_path}. Reason: {e}')
+
     # List to store video names
     video_names = []
+    dataset_size = 0
 
     # Global variables for frame extraction
     NUM_FRAMES = num_frames  # number of frames to extract from each video
@@ -57,12 +67,15 @@ def extract_frames(path, frames_path, num_frames, time_interval):
                         frame_name = f"{video_name}_{extracted_frames + 1}.png"
                         frame_path = os.path.join(frames_path, frame_name)
                         cv2.imwrite(frame_path, image)
+                        # frame = (frame_path, image)
+                        # frames.append(frame)
 
                         extracted_frames += 1
                     success, image = vidcap.read()
                     frame_count += 1
 
+                dataset_size += extracted_frames
 
-def extract_frame(video_path, frames_path, num_frames, time_interval):
-    extract_frames(video_path, frames_path, num_frames, time_interval)
+    return dataset_size
+
 

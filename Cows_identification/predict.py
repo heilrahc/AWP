@@ -3,7 +3,7 @@ import cv2
 import os
 
 
-def init_yolo(yolo_cls, train_dataset, epochs, model_path, train):
+def init_yolo(yolo_cls, train_dataset, epochs, model_path, re_train):
     if model_path is None:
         # Load a pretrained YOLO model (recommended for training)
         yolo = yolo_cls
@@ -14,22 +14,22 @@ def init_yolo(yolo_cls, train_dataset, epochs, model_path, train):
         # Load a trained YOLO model
         yolo = YOLO(model_path)
 
-        if train:
+        if re_train:
             # Re-Train the model
             yolo.train(data=train_dataset, epochs=epochs, imgsz=640)
 
 
 
     # Validate the model
-    metrics = yolo.val()
-    print(metrics.top1)   # top1 accuracy
-    print(metrics.top5)   # top5 accuracy
+    # metrics = yolo.val()
+    # print(metrics.top1)   # top1 accuracy
+    # print(metrics.top5)   # top5 accuracy
 
     return yolo
 
 
 def yolo_train(yolo_cls, train_dataset, epochs, yolo_cls_trained_path=None, train=False):
-    yolo = init_yolo(yolo_cls, train_dataset, epochs, yolo_cls_trained_path, train=train)
+    yolo = init_yolo(yolo_cls, train_dataset, epochs, yolo_cls_trained_path, re_train=train)
     return yolo
 
 

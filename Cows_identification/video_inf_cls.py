@@ -112,7 +112,7 @@ def process_image(frames, seg_model):
 
 
 def yolo_predict(video_path, masked_images, yolo_finetuned):
-    dict = {}
+    class_dict = {}
     # Change the file extension to ".json"
     json_path = video_path.rsplit('.', 1)[0] + '.json'
     image_path = video_path.rsplit('.', 1)[0] + '.png'
@@ -126,22 +126,22 @@ def yolo_predict(video_path, masked_images, yolo_finetuned):
         top5_class = [result[0].names[i] for i in top5_indx]
         for i in range(5):
             # Update the value for 'key'
-            if top5_class[i] in dict:
-                dict[top5_class[i]] += probs.top5conf[i].item()
+            if top5_class[i] in class_dict:
+                class_dict[top5_class[i]] += probs.top5conf[i].item()
             else:
-                dict[top5_class[i]] = probs.top5conf[i].item()
+                class_dict[top5_class[i]] = probs.top5conf[i].item()
 
     # Sort the dictionary items based on values in descending order
-    sorted_items = sorted(dict.items(), key=lambda x: x[1], reverse=True)
+    sorted_items = sorted(class_dict.items(), key=lambda x: x[1], reverse=True)
 
     # Select the top 5 items
-    top5_items = sorted_items[:5]
+    top5_items = dict(sorted_items[:5])
 
     # Copy the dictionary
-    new_dict = dict.copy()
+    new_dict = top5_items.copy()
 
-    # Divide each value by 5 in the original dictionary
-    for key, value in top5_items:
+    # Divide each value by number of frames in the original dictionary
+    for key, value in new_dict.items():
         new_dict[key] = value / len(masked_images)
 
     # Create the file and save the top 5 dictionary to it
@@ -201,8 +201,7 @@ def classify_videos(test_videos_path, cls_model, seg_model, num_frames, time_int
     with open(os.path.join(test_videos_path, result_name), 'w') as file:
         file.write(str(accuracy))
 
+    return accuracy
 
-def video_knn(test_videos_path, cls_model, seg_model, num_frames, time_interval):
-    # TODO: cluster the unlabeled videos to their closest class
-    return None
+
 
