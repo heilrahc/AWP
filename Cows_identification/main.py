@@ -4,6 +4,7 @@ from predict import yolo_train
 from video_inf_cls import classify_videos
 from ultralytics import YOLO
 import argparse
+import warnings
 
 DEFAULT_DATASET = "/home/mine01/Desktop/code/AWP/Cows_identification/data/cows_datasets"
 
@@ -56,18 +57,30 @@ if __name__ == "__main__":
 
     if args.trained_cls_model is None:
         if args.train_dataset is None:
+            if args.train_videos is None:
+                raise ValueError("Missing argument 'train_video' or 'train_dataset'. Must specify at least one.")
             data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
             segment_images(args.frame_path, yolo_seg, test_ratio=args.test_ratio)
             yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, train=args.retrain)
         else:
+            if args.train_videos is not None:
+                warnings.warn("'train_dataset' is specified, the 'train_videos' will not be used")
             yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, train=args.retrain)
     else:
-        if args.train_dataset is None:
-            data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
-            segment_images(args.frame_path, yolo_seg, test_ratio=args.test_ratio)
-            yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, args.trained_cls_model, train=args.retrain)
+        if args.retrain is True:
+            if args.train_dataset is None:
+                if args.train_videos is None:
+                    raise ValueError("Missing argument 'train_video' or 'train_dataset'. Must specify at least one.")
+                data_size = extract_frames(args.train_videos, args.frame_path, args.num_frames_t, args.time_interval_t)
+                segment_images(args.frame_path, yolo_seg, test_ratio=args.test_ratio)
+                yolo = yolo_train(yolo_cls, DEFAULT_DATASET, args.epochs, args.trained_cls_model, train=args.retrain)
+            else:
+                yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, args.trained_cls_model, train=args.retrain)
         else:
-            yolo = yolo_train(yolo_cls, args.train_dataset, args.epochs, args.trained_cls_model, train=args.retrain)
+            if args.train_dataset is not None or args.train_videos is not None:
+                warnings.warn("'trained_cls_model' is specified, and retrain is set to false. "
+                              "So neither train_videos or train_dataset will be used.")
+            yolo = yolo_train(yolo_cls, None, args.epochs, args.trained_cls_model, train=args.retrain)
 
     if args.inf_videos is not None:
         # perform videos inference
@@ -77,6 +90,8 @@ if __name__ == "__main__":
 
         # cluster_unlabelled_videos(args.unlabelled_video_path, args.labelled_video_path, yolo, yolo_seg,
         #                           args.num_frames_i, args.time_interval_i)
+    else:
+        raise ValueError("'inf_videos' is not specified, need it to report test accuracy")
 
 
     # # Create a plot
